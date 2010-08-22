@@ -28,7 +28,11 @@ distance(A,B) when is_tuple(A) andalso is_tuple(B) ->
                             tuple_to_list(B))))).
 
 gravity(A,B) when is_record(A,agent) andalso is_record(B,agent) ->
-    1 / math:pow(distance(A,B),2).
+    gravity(distance(A,B)).
+gravity(D) when d /= 0 ->
+    1 / math:pow(D,2);
+gravity(_) ->
+    0.
 
 in_range({Min, Max}, Distance)
   when Min < Distance andalso Distance =< Max ->
@@ -60,21 +64,26 @@ which ({0, 0, 0}, B) ->
 which (_,_) ->
     {0, 0, 0}.
 
+new_pos(D,P,V) when D =:= 0 ->
+    P;
+new_pos(D,{X,Y,Z},{Xd,Yd,Zd}) ->
+    {X + Xd/D, Y + Yd/D, Z + Zd/D}.
+
 move(Swarm) ->
     lists:map(fun (Agent) ->
                       move(Agent,Swarm) end, Swarm).
 
 move(Agent, Swarm) when is_record(Agent,agent) andalso is_list(Swarm)->
-    {X,Y,Z} = Agent#agent.pos,
-    {Xd,Yd,Zd}=lists:foldl(fun ({X1,Y1,Z1},{X2,Y2,Z2}) -> {X1+X2,Y1+Y2,Z1+Z2} end,
-                {0,0,0},
-                lists:map(fun (Bgent) ->
-                                  move(Agent,Bgent) end, Swarm)),
-    Dist=distance({0,0,0},{Xd,Yd,Zd}),
-    New_pos={X + Xd/Dist, Y + Yd/Dist, Z + Zd/Dist}, % everyone moves at nominal speed
+    Vector=lists:foldl(fun ({X1,Y1,Z1},{X2,Y2,Z2}) -> {X1+X2,Y1+Y2,Z1+Z2} end,
+                       {0,0,0},
+                       lists:map(fun (Bgent) ->
+                                         move(Agent,Bgent) end, Swarm)),
+    {Xd,Yd,Zd}=Vector,
+    New_pos=new_pos(distance({0,0,0},{Xd,Yd,Zd}),Agent#agent.pos, Vector),
+    %New_pos={X + Xd/Dist, Y + Yd/Dist, Z + Zd/Dist}, % everyone moves at nominal speed
     %#agent{pos={X + Xd,Y + Yd,Z + Zd}, % speed is dependant on relevant all forces.
     #agent{pos=New_pos,
-           velocity={Xd,Yd,Zd},
+           velocity=Vector,
            avoid=Agent#agent.avoid,
            comfort=Agent#agent.comfort,
            attract=Agent#agent.attract};
