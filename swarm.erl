@@ -29,10 +29,11 @@ distance(A,B) when is_tuple(A) andalso is_tuple(B) ->
 
 gravity(A,B) when is_record(A,agent) andalso is_record(B,agent) ->
     gravity(distance(A,B)).
-gravity(D) when d /= 0 ->
-    1 / math:pow(D,2);
-gravity(_) ->
-    0.
+
+gravity(D) when D == 0 ->
+    0;
+gravity(D) when is_number(D) ->
+    1 / math:pow(D,2).
 
 in_range({Min, Max}, Distance)
   when Min < Distance andalso Distance =< Max ->
@@ -40,6 +41,8 @@ in_range({Min, Max}, Distance)
 in_range(_, _) ->
     false.
 
+normal_vector(Agent,Agent) ->
+    {0,0,0};
 normal_vector(Agent,Bgent) ->
     Distance=distance(Agent,Bgent),
     {X1,Y1,Z1}=Agent#agent.pos,
@@ -64,7 +67,7 @@ which ({0, 0, 0}, B) ->
 which (_,_) ->
     {0, 0, 0}.
 
-new_pos(D,P,V) when D =:= 0 ->
+new_pos(D,P,V) when D == 0 ->
     P;
 new_pos(D,{X,Y,Z},{Xd,Yd,Zd}) ->
     {X + Xd/D, Y + Yd/D, Z + Zd/D}.
