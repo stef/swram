@@ -1,16 +1,14 @@
 -module(swarm).
 -compile(export_all).
--record(agent,{pos={random:uniform() * 1000,
-                    random:uniform() * 1000,
-                    random:uniform() * 1000},
-               velocity={0,0,0},
-               avoid={0,4},
-               comfort={4,20},
-               attract={20,300}}).
+-define(REPEL_FORCE,-10).
+-define(ATTRACT_FORCE,1000).
+-define(ITERS_PER_FRAME,1).
+-record(agent,{pos={random:uniform() * 500,
+                    random:uniform() * 500,
+                    random:uniform() * 500},
+               avoid={0,((random:uniform()-0.5)*10)+10},
+               attract={18,((random:uniform()-0.5)*100)+300}}).
 
-repel_force() -> -0.5.
-attract_force() -> 1000.
-iters_per_frame() -> 1.
 
 create_agent() ->
     #agent{}.
@@ -20,19 +18,21 @@ create_agents(N) ->
 
 distance(A,B) when is_record(A,agent) andalso is_record(B,agent) ->
     distance(A#agent.pos,B#agent.pos);
-distance(A,B) when is_tuple(A) andalso is_tuple(B) ->
-    math:sqrt(lists:sum(
-                lists:map(
-                  fun ({X,Y}) -> math:pow(Y-X, 2) end,
-                  lists:zip(tuple_to_list(A),
-                            tuple_to_list(B))))).
+%distance(A,B) ->
+%    math:sqrt(lists:sum(
+%                lists:map(
+%                  fun ({X,Y}) -> math:pow(Y-X, 2) end,
+%                  lists:zip(tuple_to_list(A),
+%                            tuple_to_list(B))))).
+distance({X1,Y1,Z1},{X2,Y2,Z2}) ->
+    math:sqrt(math:pow((X2-X1),2)+math:pow((Y2-Y1),2)+math:pow((Z2-Z1),2)).
 
-gravity(A,B) when is_record(A,agent) andalso is_record(B,agent) ->
+gravity(A,B) ->
     gravity(distance(A,B)).
 
 gravity(D) when D == 0 ->
     0;
-gravity(D) when is_number(D) ->
+gravity(D) ->
     1 / math:pow(D,2).
 
 in_range({Min, Max}, Distance)
@@ -60,52 +60,52 @@ gravity_vector(Agent,Bgent,Valid,Const) when Valid =:= true ->
 gravity_vector(_,_,_,_) ->
     {0, 0, 0}.
 
-which (A,{0, 0, 0}) ->
+which (A, {0, 0, 0}) ->
     A;
 which ({0, 0, 0}, B) ->
     B;
 which (_,_) ->
     {0, 0, 0}.
 
-new_pos(D,P,V) when D == 0 ->
+new_pos(D,P,_) when D == 0 ->
     P;
-new_pos(D,{X,Y,Z},{Xd,Yd,Zd}) ->
+new_pos(D, {X,Y,Z}, {Xd,Yd,Zd}) ->
     {X + Xd/D, Y + Yd/D, Z + Zd/D}.
+
+len(Vector) ->
+    distance({0,0,0},Vector).
+
+add_vectors({X1,Y1,Z1},{X2,Y2,Z2}) ->
+    {X1+X2,Y1+Y2,Z1+Z2}.
 
 move(Swarm) ->
     lists:map(fun (Agent) ->
                       move(Agent,Swarm) end, Swarm).
 
 move(Agent, Swarm) when is_record(Agent,agent) andalso is_list(Swarm)->
-    Vector=lists:foldl(fun ({X1,Y1,Z1},{X2,Y2,Z2}) -> {X1+X2,Y1+Y2,Z1+Z2} end,
+    Vector=lists:foldl(fun swarm:add_vectors/2,
                        {0,0,0},
                        lists:map(fun (Bgent) ->
                                          move(Agent,Bgent) end, Swarm)),
-    {Xd,Yd,Zd}=Vector,
-    New_pos=new_pos(distance({0,0,0},{Xd,Yd,Zd}),Agent#agent.pos, Vector),
-    %New_pos={X + Xd/Dist, Y + Yd/Dist, Z + Zd/Dist}, % everyone moves at nominal speed
-    %#agent{pos={X + Xd,Y + Yd,Z + Zd}, % speed is dependant on relevant all forces.
-    #agent{pos=New_pos,
-           velocity=Vector,
+    #agent{pos=new_pos(len(Vector),Agent#agent.pos, Vector),
            avoid=Agent#agent.avoid,
-           comfort=Agent#agent.comfort,
            attract=Agent#agent.attract};
 move(Agent, Agent) ->
     {0, 0, 0};
 move(Agent, Bgent) when is_record(Agent,agent) andalso is_record(Bgent,agent)->
     Distance = distance(Agent,Bgent),
-    which(gravity_vector(Agent,Bgent,in_range(Agent#agent.avoid,Distance),repel_force()),
-          gravity_vector(Agent,Bgent,in_range(Agent#agent.attract,Distance),attract_force())).
+    which(gravity_vector(Agent,Bgent,in_range(Agent#agent.avoid,Distance),?REPEL_FORCE),
+          gravity_vector(Agent,Bgent,in_range(Agent#agent.attract,Distance),?ATTRACT_FORCE)).
 
 dump_positions(Swarm) ->
     lists:foreach(fun (Agent) ->
                           {X,Y,Z} = Agent#agent.pos,
-                      io:format("~p ~p ~p~n", [X/100,Y/100,Z/100]) end, Swarm),
+                          io:format("~p ~p ~p~n", [X/100,Y/100,Z/100]) end, Swarm),
     io:format("done~n").
 
 infinite(Swarm) ->
     dump_positions(Swarm),
-    infinite(run(move(Swarm),iters_per_frame())).
+    infinite(run(move(Swarm),?ITERS_PER_FRAME)).
 
 run(Swarm) ->
     run(move(Swarm),100).
@@ -124,7 +124,6 @@ test(N) ->
     %[ HEAD | TAIL ] = Swarm,
     %[ HEAD1 | _ ] = TAIL,
     %io:format("Swarm: ~p~n",[Swarm]),
-    %io:format("ASDF~n"),
     %io:format("Distances: ~p~n",[swarm:distance(HEAD,HEAD1)]),
     %io:format("Gravity: ~p~n",[swarm:gravity(HEAD,HEAD1)]),
     %swarm:dump_positions(Swarm),
@@ -137,5 +136,5 @@ test(N) ->
 
 main(_) ->
     Swarm=create_agents(100),
-    run(Swarm,1000).
+    run(Swarm,5000).
     %infinite(Swarm).
